@@ -9,73 +9,79 @@ import (
 )
 
 func GetPathSize(path string, recursive, human, all bool) (string, error) {
-	fileInfo, err := os.Lstat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to access path: %w", err)
 	}
-	var totalSize int64
-	if fileInfo.Mode().IsRegular() {
-		totalSize = fileInfo.Size()
+
+	var total int64
+	if info.Mode().IsRegular() {
+		total = info.Size()
 	} else {
 		if recursive {
-			err = filepath.WalkDir(path, func(currentPath string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				if !all && strings.HasPrefix(d.Name(), ".") {
-					if d.IsDir() {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-
-				if !d.IsDir() {
-					info, err := d.Info()
-					if err != nil {
-						return err
-					}
-					totalSize += info.Size()
-				}
-				return nil
-			})
-		} else {
-			entries, err := os.ReadDir(path)
+			total, err = dirSizeRecursive(path, all)
 			if err != nil {
-				return "", fmt.Errorf("failed to read directory: %w", err)
+				return "", fmt.Errorf("failed to calculate recursive size: %w", err)
 			}
-			for _, entry := range entries {
-				if !all && strings.HasPrefix(entry.Name(), ".") {
-					continue
-				}
-				fullPath := filepath.Join(path, entry.Name())
-				fileInfo, err := os.Stat(fullPath)
-				if err != nil {
-					continue
-				}
-
-				if fileInfo.Mode().IsRegular() {
-					totalSize += fileInfo.Size()
-				}
+		} else {
+			total, err = dirSizeNonRecursive(path, all)
+			if err != nil {
+				return "", fmt.Errorf("failed to calculate directory size: %w", err)
 			}
 		}
 	}
-	if err != nil {
-		return "", fmt.Errorf("error during size calculation: %w", err)
-	}
+
 	if human {
-		return formatHumanReadable(totalSize), nil
+		return FormatHumanReadable(total), nil
 	}
-	return fmt.Sprintf("%dB", totalSize), nil
+	return fmt.Sprintf("%dB", total), nil
 }
-func formatHumanReadable(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%dB", size)
+
+func dirSizeRecursive(root string, all bool) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(root, func(curr string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !all && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			total += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+	return total, nil
+}
+
+func dirSizeNonRecursive(path string, all bool) (int64, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return 0, err
 	}
-	return fmt.Sprintf("%.1f%cB", float64(size)/float64(div), "KMGTPE"[exp])
+	var total int64
+	for _, e := range entries {
+		if !all && strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		full := filepath.Join(path, e.Name())
+		info, err := os.Lstat(full)
+		if err != nil {
+			return 0, fmt.Errorf("failed to stat %q: %w", full, err)
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+	}
+	return total, nil
 }
