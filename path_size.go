@@ -1,4 +1,3 @@
-// Package code calculates the size of files and directories.
 package code
 
 import (
@@ -9,10 +8,6 @@ import (
 	"strings"
 )
 
-// GetPathSize returns only the formatted size; the caller handles output.
-// Directory sizes are sums of file sizes, excluding directory metadata.
-// Hidden entries are skipped unless all is true. An explicitly supplied root
-// is always processed. Symbolic links contribute their own size, never targets.
 func GetPathSize(path string, recursive, human, all bool) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {

@@ -2,7 +2,6 @@ package code
 
 import "fmt"
 
-// FormatHumanReadable uses powers of 1024 and one decimal place above bytes.
 func FormatHumanReadable(size int64) string {
 	const unitSize = 1024
 	units := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
