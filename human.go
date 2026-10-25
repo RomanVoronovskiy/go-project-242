@@ -2,23 +2,19 @@ package code
 
 import "fmt"
 
+// FormatHumanReadable uses powers of 1024 and one decimal place above bytes.
 func FormatHumanReadable(size int64) string {
-	const base = 1024
-	if size < base {
+	const unitSize = 1024
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
+	if size < unitSize {
 		return fmt.Sprintf("%dB", size)
 	}
 
-	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
-	var value float64 = float64(size)
-	var i int
-	for i = 0; i < len(units); i++ {
-		value = value / float64(base)
-		if value < float64(base) {
-			if value == float64(int64(value)) {
-				return fmt.Sprintf("%.0f%s", value, units[i])
-			}
-			return fmt.Sprintf("%.1f%s", value, units[i])
-		}
+	value := float64(size)
+	unit := 0
+	for value >= unitSize && unit < len(units)-1 {
+		value /= unitSize
+		unit++
 	}
-	return fmt.Sprintf("%.1f%s", value, units[len(units)-1])
+	return fmt.Sprintf("%.1f%s", value, units[unit])
 }

@@ -1,3 +1,4 @@
+// Package code calculates the size of files and directories.
 package code
 
 import (
@@ -8,80 +9,62 @@ import (
 	"strings"
 )
 
+// GetPathSize returns only the formatted size; the caller handles output.
+// Directory sizes are sums of file sizes, excluding directory metadata.
+// Hidden entries are skipped unless all is true. An explicitly supplied root
+// is always processed. Symbolic links contribute their own size, never targets.
 func GetPathSize(path string, recursive, human, all bool) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to access path: %w", err)
+		return "", fmt.Errorf("access %q: %w", path, err)
 	}
 
-	var total int64
-	if info.Mode().IsRegular() {
-		total = info.Size()
-	} else {
-		if recursive {
-			total, err = dirSizeRecursive(path, all)
-			if err != nil {
-				return "", fmt.Errorf("failed to calculate recursive size: %w", err)
-			}
-		} else {
-			total, err = dirSizeNonRecursive(path, all)
-			if err != nil {
-				return "", fmt.Errorf("failed to calculate directory size: %w", err)
-			}
+	size := info.Size()
+	if info.IsDir() {
+		size, err = directorySize(path, recursive, all)
+		if err != nil {
+			return "", err
 		}
 	}
 
 	if human {
-		return FormatHumanReadable(total), nil
+		return FormatHumanReadable(size), nil
 	}
-	return fmt.Sprintf("%dB", total), nil
+	return fmt.Sprintf("%dB", size), nil
 }
 
-func dirSizeRecursive(root string, all bool) (int64, error) {
-	var total int64
-	err := filepath.WalkDir(root, func(curr string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if !all && strings.HasPrefix(d.Name(), ".") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			total += info.Size()
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
-func dirSizeNonRecursive(path string, all bool) (int64, error) {
+func directorySize(path string, recursive, all bool) (int64, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("read directory %q: %w", path, err)
 	}
+
 	var total int64
-	for _, e := range entries {
-		if !all && strings.HasPrefix(e.Name(), ".") {
+	for _, entry := range entries {
+		if !all && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		full := filepath.Join(path, e.Name())
-		info, err := os.Lstat(full)
+		size, err := entrySize(path, entry, recursive, all)
 		if err != nil {
-			return 0, fmt.Errorf("failed to stat %q: %w", full, err)
+			return 0, err
 		}
-		if info.Mode().IsRegular() {
-			total += info.Size()
-		}
+		total += size
 	}
 	return total, nil
+}
+
+func entrySize(parent string, entry fs.DirEntry, recursive, all bool) (int64, error) {
+	path := filepath.Join(parent, entry.Name())
+	if entry.IsDir() {
+		if recursive {
+			return directorySize(path, recursive, all)
+		}
+		return 0, nil
+	}
+
+	info, err := entry.Info()
+	if err != nil {
+		return 0, fmt.Errorf("access %q: %w", path, err)
+	}
+	return info.Size(), nil
 }

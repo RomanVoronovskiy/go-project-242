@@ -1,9 +1,10 @@
-package code
+package test
 
 import (
 	"code"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetPathSizeHumanTxt(t *testing.T) {
